@@ -12,7 +12,7 @@ events.on("webhook", (e, p) => {
 
 events.on("trello", (e, p) => {
   console.log(e.payload);
-  const hook = JSON.parse(e.pyaoad)
+  const hook = JSON.parse(e.payload)
   const d = hook.action.display
   if (d.translationKey != ACTION_MOVE) {
     return
