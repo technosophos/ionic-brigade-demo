@@ -1,9 +1,19 @@
 const { events, Job } = require("brigadier");
 
 const ACTION_MOVE = "action_move_card_from_list_to_list"
+const chartName = "stable/memcached"
+const relName = "md"
 
 events.on("exec", (e, p) => {
   console.log("hello")
+
+  var helm = new Job("helm", "lachlanevenson/k8s-helm:v2.6.1");
+  helm.tasks = [
+    "helm init",
+    `helm install ${chartName} -n ${relName}`
+  ]
+
+  helm.run()
 });
 
 events.on("webhook", (e, p) => {
@@ -18,11 +28,41 @@ events.on("trello", (e, p) => {
     return
   }
 
-  var s = slack(p, hook)
+  var s = newSlack(p, hook)
   s.run()
+
+  if (d.entities.listAfter.name == "Up") {
+    var helm = new Job("helm", "lachlanevenson/k8s-helm:v2.6.1");
+    helm.tasks = [
+      `helm upgrade ${relName} ${chartName} --set replicaCount=2`
+    ];
+    helm.run()
+  } else if (d.entities.listAfter == "Down") {
+    var helm = new Job("helm", "lachlanevenson/k8s-helm:v2.6.1");
+    helm.tasks = [
+      `helm upgrade ${relName} ${chartName} --set replicaCount=1`
+    ];
+    helm.run()
+  }
 });
 
-function slack(p, hook) {
+events.on("StatefulSet:SuccessfulCreate", (e, p) => {
+  var trello = new Job("trello", "technosophos/trello-cli:latest")
+  trello.env = {
+    APIKEY: p.secrets.trelloKey,
+    TOKEN: p.secrets.trelloToken
+  }
+  trello.tasks = [
+    "env2creds",
+    "trello refresh",
+    `trello add-card ${relName} ${relName} -b Ionic -l New`
+  ]
+
+  trello.run()
+})
+
+
+function newSlack(p, hook) {
   const d = hook.action.display
   var slack = new Job("slack-notify", "technosophos/slack-notify:latest", ["/slack-notify"])
   var m = `From "${d.entities.listBefore.text}" to "${d.entities.listAfter.text}" <${hook.model.shortUrl}> <@U0RMKK605>`  
@@ -34,4 +74,5 @@ function slack(p, hook) {
     SLACK_MESSAGE: m,
     SLACK_ICON: "https://a.trellocdn.com/images/ios/0307bc39ec6c9ff499c80e18c767b8b1/apple-touch-icon-152x152-precomposed.png"
   }
+  return slack;
 }
