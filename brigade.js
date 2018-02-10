@@ -18,6 +18,17 @@ events.on("exec", (e, p) => {
 
 events.on("webhook", (e, p) => {
   console.log(e.provider)
+  var slack = new Job("slack-notify", "technosophos/slack-notify:latest", ["/slack-notify"])
+  var m = "This is a message from Butcher's watch"
+  slack.storage.enabled = false
+  slack.env = {
+    SLACK_WEBHOOK: p.secrets.SLACK_WEBHOOK,
+    SLACK_USERNAME: "FitBit",
+    SLACK_TITLE: "Watch Me!",
+    SLACK_MESSAGE: m
+    //SLACK_ICON: "https://a.trellocdn.com/images/ios/0307bc39ec6c9ff499c80e18c767b8b1/apple-touch-icon-152x152-precomposed.png"
+  }
+  slack.run()
 });
 
 events.on("trello", (e, p) => {
@@ -60,6 +71,21 @@ events.on("StatefulSet:SuccessfulCreate", (e, p) => {
 
   trello.run()
 })
+
+events.on("StatefulSet:SuccessfulDelete", (e, p) => {
+  var trello = new Job("trello", "technosophos/trello-cli:latest")
+  trello.env = {
+    APIKEY: p.secrets.trelloKey,
+    TOKEN: p.secrets.trelloToken
+  }
+  trello.tasks = [
+    "env2creds",
+    "trello refresh",
+    `trello delete-card ${relName} -b Ionic`
+  ]
+
+  trello.run()
+});
 
 
 function newSlack(p, hook) {
